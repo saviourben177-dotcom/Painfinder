@@ -6,9 +6,6 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": {
-    "@workspace/api-server": "workspace:*"
-  },
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "~5.9.3"

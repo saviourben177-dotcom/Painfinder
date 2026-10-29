@@ -152,10 +152,6 @@ importers:
         version: 5.9.3
 
   api:
-    dependencies:
-      '@workspace/api-server':
-        specifier: workspace:*
-        version: link:../artifacts/api-server
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
