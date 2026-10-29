@@ -1,0 +1,604 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: PainRadar API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: campaigns
+    description: Campaign management
+  - name: leads
+    description: Discussion lead discovery and outreach
+  - name: dashboard
+    description: Account dashboard and analytics
+  - name: settings
+    description: User preferences and source availability
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [campaigns]
+      summary: List campaigns
+      responses:
+        "200":
+          description: Account campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Campaign"
+    post:
+      operationId: createCampaign
+      tags: [campaigns]
+      summary: Create a campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignInput"
+      responses:
+        "201":
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+
+  /campaigns/{campaignId}:
+    patch:
+      operationId: updateCampaign
+      tags: [campaigns]
+      summary: Update a campaign
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignUpdate"
+      responses:
+        "200":
+          description: Campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        "404":
+          description: Campaign not found
+    delete:
+      operationId: deleteCampaign
+      tags: [campaigns]
+      summary: Delete a campaign and its leads
+      description: Deleting a campaign also deletes leads imported into that campaign.
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      responses:
+        "204":
+          description: Campaign deleted
+        "404":
+          description: Campaign not found
+
+  /leads:
+    get:
+      operationId: listLeads
+      tags: [leads]
+      summary: Search and filter leads
+      parameters:
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: source
+          in: query
+          schema:
+            $ref: "#/components/schemas/LeadSource"
+        - name: intent
+          in: query
+          schema:
+            $ref: "#/components/schemas/IntentCategory"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/LeadStatus"
+        - name: savedOnly
+          in: query
+          schema:
+            type: boolean
+        - name: recency
+          in: query
+          schema:
+            type: string
+            enum: [7d, 30d, 90d, all]
+        - name: minScore
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+        - name: minEngagement
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [relevance, recent, engagement]
+      responses:
+        "200":
+          description: Filtered leads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lead"
+    post:
+      operationId: importLead
+      tags: [leads]
+      summary: Import a discussion URL
+      description: User-provided metadata is stored without scraping the source page.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadImportInput"
+      responses:
+        "201":
+          description: Lead imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "409":
+          description: Discussion already exists in this account
+
+  /leads/{leadId}:
+    get:
+      operationId: getLead
+      tags: [leads]
+      summary: Get lead details
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      responses:
+        "200":
+          description: Lead details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Lead not found
+    patch:
+      operationId: updateLead
+      tags: [leads]
+      summary: Update lead status, saved state, or notes
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadUpdate"
+      responses:
+        "200":
+          description: Lead updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Lead not found
+    delete:
+      operationId: deleteLead
+      tags: [leads]
+      summary: Delete a lead
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      responses:
+        "204":
+          description: Lead deleted
+        "404":
+          description: Lead not found
+
+  /discover/hacker-news:
+    post:
+      operationId: discoverHackerNews
+      tags: [leads]
+      summary: Find matching public Hacker News discussions
+      description: Reads public stories and Ask HN posts through the official Hacker News Firebase API.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HackerNewsDiscoveryInput"
+      responses:
+        "200":
+          description: Scan results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HackerNewsDiscoveryResult"
+        "404":
+          description: Campaign not found
+        "400":
+          description: Campaign does not include Hacker News as a preferred source
+        "502":
+          description: Hacker News API unavailable
+
+  /demo/workspace:
+    post:
+      operationId: createDemoWorkspace
+      tags: [leads]
+      summary: Add clearly labeled demo records
+      description: Adds a sample campaign and demo leads to the signed-in account.
+      responses:
+        "201":
+          description: Demo workspace created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoWorkspace"
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get stored-data dashboard metrics
+      responses:
+        "200":
+          description: Dashboard summary computed from account records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /analytics:
+    get:
+      operationId: getAnalytics
+      tags: [dashboard]
+      summary: Get stored-data analytics
+      responses:
+        "200":
+          description: Analytics computed from account records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get account preferences
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update account preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+
+  /sources:
+    get:
+      operationId: listSourceStatuses
+      tags: [settings]
+      summary: List source connectors and authorization status
+      responses:
+        "200":
+          description: Available source status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SourceStatus"
+
+components:
+  parameters:
+    CampaignId:
+      name: campaignId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    LeadId:
+      name: leadId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    Campaign:
+      type: object
+      required: [id, productName, description, targetAudience, problems, keywords, excludedTopics, preferredSources, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        productName: { type: string }
+        description: { type: string }
+        targetAudience: { type: string }
+        problems:
+          type: array
+          items: { type: string }
+        keywords:
+          type: array
+          items: { type: string }
+        excludedTopics:
+          type: array
+          items: { type: string }
+        preferredSources:
+          type: array
+          items: { $ref: "#/components/schemas/LeadSource" }
+        status:
+          type: string
+          enum: [active, paused]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CampaignInput:
+      type: object
+      required: [productName, description, targetAudience, problems, keywords, excludedTopics, preferredSources]
+      properties:
+        productName: { type: string, minLength: 2, maxLength: 100 }
+        description: { type: string, minLength: 10, maxLength: 2000 }
+        targetAudience: { type: string, minLength: 2, maxLength: 500 }
+        problems:
+          type: array
+          items: { type: string, minLength: 2, maxLength: 200 }
+          maxItems: 20
+        keywords:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 80 }
+          maxItems: 40
+        excludedTopics:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 80 }
+          maxItems: 40
+        preferredSources:
+          type: array
+          items: { $ref: "#/components/schemas/LeadSource" }
+          maxItems: 8
+    CampaignUpdate:
+      type: object
+      properties:
+        productName: { type: string, minLength: 2, maxLength: 100 }
+        description: { type: string, minLength: 10, maxLength: 2000 }
+        targetAudience: { type: string, minLength: 2, maxLength: 500 }
+        problems:
+          type: array
+          items: { type: string, minLength: 2, maxLength: 200 }
+          maxItems: 20
+        keywords:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 80 }
+          maxItems: 40
+        excludedTopics:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 80 }
+          maxItems: 40
+        preferredSources:
+          type: array
+          items: { $ref: "#/components/schemas/LeadSource" }
+          maxItems: 8
+        status:
+          type: string
+          enum: [active, paused]
+
+    LeadSource:
+      type: string
+      enum: [reddit, hacker_news, x, facebook, other]
+    IntentCategory:
+      type: string
+      enum: [recommendation_request, solution_search, general_problem]
+    LeadStatus:
+      type: string
+      enum: [new, contacted, replied, converted, dismissed]
+    Lead:
+      type: object
+      required: [id, campaignId, title, excerpt, source, sourceUrl, discussionAt, contactedAt, engagementCount, relevanceScore, intentCategory, intentSignals, scoreReasons, status, saved, isDemo, isSpam, isSelfPromotion, isBait, isIrrelevant, outreachNotes, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        campaignId: { type: string, format: uuid }
+        title: { type: string }
+        excerpt: { type: string }
+        source: { $ref: "#/components/schemas/LeadSource" }
+        sourceUrl: { type: string, format: uri }
+        discussionAt: { type: ["string", "null"], format: date-time }
+        contactedAt: { type: ["string", "null"], format: date-time }
+        engagementCount: { type: ["integer", "null"], minimum: 0 }
+        relevanceScore: { type: integer, minimum: 0, maximum: 100 }
+        intentCategory: { $ref: "#/components/schemas/IntentCategory" }
+        intentSignals:
+          type: array
+          items: { type: string }
+        scoreReasons:
+          type: array
+          items: { type: string }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        saved: { type: boolean }
+        isDemo: { type: boolean }
+        isSpam: { type: boolean }
+        isSelfPromotion: { type: boolean }
+        isBait: { type: boolean }
+        isIrrelevant: { type: boolean }
+        outreachNotes: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    LeadImportInput:
+      type: object
+      required: [campaignId, title, excerpt, sourceUrl]
+      properties:
+        campaignId: { type: string, format: uuid }
+        title: { type: string, minLength: 4, maxLength: 300 }
+        excerpt: { type: string, minLength: 8, maxLength: 1500 }
+        sourceUrl: { type: string, format: uri, maxLength: 2048 }
+        discussionAt: { type: string, format: date-time }
+        engagementCount: { type: integer, minimum: 0 }
+    LeadUpdate:
+      type: object
+      properties:
+        saved: { type: boolean }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        outreachNotes: { type: string, maxLength: 5000 }
+        isSpam: { type: boolean }
+        isSelfPromotion: { type: boolean }
+        isBait: { type: boolean }
+        isIrrelevant: { type: boolean }
+    HackerNewsDiscoveryInput:
+      type: object
+      required: [campaignId]
+      properties:
+        campaignId: { type: string, format: uuid }
+        maxStories:
+          type: integer
+          minimum: 10
+          maximum: 80
+    HackerNewsDiscoveryResult:
+      type: object
+      required: [checkedCount, importedCount, visibleCount, duplicateCount, leads]
+      properties:
+        checkedCount: { type: integer }
+        importedCount: { type: integer }
+        visibleCount: { type: integer }
+        duplicateCount: { type: integer }
+        leads:
+          type: array
+          items: { $ref: "#/components/schemas/Lead" }
+    DemoWorkspace:
+      type: object
+      required: [campaign, leads]
+      properties:
+        campaign: { $ref: "#/components/schemas/Campaign" }
+        leads:
+          type: array
+          items: { $ref: "#/components/schemas/Lead" }
+    DashboardSummary:
+      type: object
+      required: [campaigns, totalLeads, savedLeads, highIntentLeads, contactedLeads, recentLeads, weeklyActivity]
+      properties:
+        campaigns: { type: integer }
+        totalLeads: { type: integer }
+        savedLeads: { type: integer }
+        highIntentLeads: { type: integer }
+        contactedLeads: { type: integer }
+        recentLeads:
+          type: array
+          items: { $ref: "#/components/schemas/Lead" }
+        weeklyActivity:
+          type: array
+          items: { $ref: "#/components/schemas/ActivityPoint" }
+    ActivityPoint:
+      type: object
+      required: [day, leads, contacted]
+      properties:
+        day: { type: string, format: date }
+        leads: { type: integer }
+        contacted: { type: integer }
+    AnalyticsSummary:
+      type: object
+      required: [totalLeads, savedLeads, contactedLeads, repliedLeads, convertedLeads, byIntent, bySource, weeklyActivity]
+      properties:
+        totalLeads: { type: integer }
+        savedLeads: { type: integer }
+        contactedLeads: { type: integer }
+        repliedLeads: { type: integer }
+        convertedLeads: { type: integer }
+        byIntent:
+          type: array
+          items: { $ref: "#/components/schemas/CountByLabel" }
+        bySource:
+          type: array
+          items: { $ref: "#/components/schemas/CountByLabel" }
+        weeklyActivity:
+          type: array
+          items: { $ref: "#/components/schemas/ActivityPoint" }
+    CountByLabel:
+      type: object
+      required: [label, count]
+      properties:
+        label: { type: string }
+        count: { type: integer }
+    UserSettings:
+      type: object
+      required: [timezone, minimumRelevance, hideFlagged, showDemoData, updatedAt]
+      properties:
+        timezone: { type: string }
+        minimumRelevance: { type: integer, minimum: 0, maximum: 100 }
+        hideFlagged: { type: boolean }
+        showDemoData: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    UserSettingsUpdate:
+      type: object
+      properties:
+        timezone: { type: string, minLength: 1, maxLength: 80 }
+        minimumRelevance: { type: integer, minimum: 0, maximum: 100 }
+        hideFlagged: { type: boolean }
+        showDemoData: { type: boolean }
+    SourceStatus:
+      type: object
+      required: [id, name, status, detail, manualImport]
+      properties:
+        id: { $ref: "#/components/schemas/LeadSource" }
+        name: { type: string }
+        status:
+          type: string
+          enum: [available, authorization_required, unavailable]
+        detail: { type: string }
+        manualImport: { type: boolean }
